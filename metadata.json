@@ -1,0 +1,5 @@
+{
+  "name": "Wall-go",
+  "description": "A strategic 7x7 board game where players vie for territory by moving pieces and building walls. Optimized for mobile pass-and-play.",
+  "requestFramePermissions": []
+}

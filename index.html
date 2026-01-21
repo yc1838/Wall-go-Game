@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Stitched Territory</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;500;700&family=Playfair+Display:ital,wght@0,700;1,400&display=swap" rel="stylesheet">
+    <script type="importmap">
+    {
+      "imports": {
+        "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+        "react/": "https://esm.sh/react@^19.2.3/",
+        "react": "https://esm.sh/react@^19.2.3",
+        "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
+      }
+    }
+    </script>
+    <style>
+        :root {
+            --parchment: #f4ece0;
+            --thread-red: #b33939;
+            --thread-blue: #227093;
+            --ink: #2c2c2c;
+            --paper-shadow: 0 10px 30px rgba(0,0,0,0.15);
+        }
+
+        body {
+            background-color: #dcd6c8;
+            background-image: url("https://www.transparenttextures.com/patterns/felt.png");
+            font-family: 'Playfair Display', serif;
+            color: var(--ink);
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overscroll-behavior-y: contain;
+            touch-action: manipulation;
+        }
+
+        /* Grain Filter */
+        .grain {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 50;
+            opacity: 0.4;
+        }
+
+        /* Typography */
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Game Canvas (Parchment) */
+        .game-canvas {
+            position: relative;
+            background: var(--parchment);
+            box-shadow: var(--paper-shadow);
+            /* Subtle paper clip path */
+            clip-path: polygon(
+                0% 1%, 2% 0%, 98% 1%, 100% 3%, 99% 97%, 97% 100%, 3% 99%, 0% 96%
+            );
+            transition: transform 0.1s ease-out;
+        }
+
+        /* Stitch Effect for Walls */
+        .wall-stitch {
+            background-image: repeating-linear-gradient(
+                90deg, 
+                transparent, 
+                transparent 4px, 
+                currentColor 4px, 
+                currentColor 10px
+            );
+        }
+        .wall-stitch-v {
+            background-image: repeating-linear-gradient(
+                180deg, 
+                transparent, 
+                transparent 4px, 
+                currentColor 4px, 
+                currentColor 10px
+            );
+        }
+
+        /* Piece Animation */
+        @keyframes emerge {
+            from { transform: scale(0) rotate(-45deg); opacity: 0; }
+            to { transform: scale(1) rotate(0); opacity: 1; }
+        }
+        .piece-anim {
+            animation: emerge 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* Stitch Decoration */
+        .stitch-border rect {
+            stroke: rgba(44, 44, 44, 0.1);
+            stroke-dasharray: 8 6;
+            stroke-width: 2;
+            fill: none;
+        }
+    </style>
+  </head>
+  <body>
+    <svg class="grain" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <filter id="noiseFilter">
+            <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/>
+            <feColorMatrix type="saturate" values="0"/>
+        </filter>
+        <rect width="100%" height="100%" filter="url(#noiseFilter)"/>
+    </svg>
+
+    <div id="root" class="h-full w-full flex items-center justify-center"></div>
+    <script type="module" src="/index.tsx"></script>
+    
+    <script>
+        // Subtle tilt effect
+        const root = document.getElementById('root');
+        let rafId;
+        
+        const handleMove = (x, y) => {
+             const canvas = document.querySelector('.game-canvas');
+             if(!canvas) return;
+             
+             // Normalize -1 to 1
+             const nx = (x / window.innerWidth) * 2 - 1;
+             const ny = (y / window.innerHeight) * 2 - 1;
+             
+             // Max rotation in degrees
+             const limit = 1.5; 
+             
+             canvas.style.transform = `perspective(1000px) rotateX(${ny * -limit}deg) rotateY(${nx * limit}deg)`;
+        };
+
+        window.addEventListener('mousemove', (e) => {
+             if (rafId) cancelAnimationFrame(rafId);
+             rafId = requestAnimationFrame(() => handleMove(e.clientX, e.clientY));
+        });
+        
+        // Basic Gyro support for mobile
+        window.addEventListener('deviceorientation', (e) => {
+            if (rafId) cancelAnimationFrame(rafId);
+            // beta is front-back (-180 to 180), gamma is left-right (-90 to 90)
+            const y = Math.min(Math.max(e.beta || 0, -45), 45) / 45 * window.innerHeight;
+            const x = Math.min(Math.max(e.gamma || 0, -45), 45) / 45 * window.innerWidth;
+            rafId = requestAnimationFrame(() => handleMove(x + window.innerWidth/2, y + window.innerHeight/2));
+        });
+    </script>
+  </body>
+</html>
