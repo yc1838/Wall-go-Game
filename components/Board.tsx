@@ -1,5 +1,5 @@
 import React from 'react';
-import { CellData, Coordinate, GamePhase, WallState } from '../types';
+import { CellData, Coordinate, GamePhase, Player, WallState } from '../types';
 import Cell from './Cell';
 
 interface BoardProps {
@@ -8,6 +8,7 @@ interface BoardProps {
   selectedPiece: Coordinate | null;
   movedTo: Coordinate | null;
   phase: GamePhase;
+  currentPlayer: Player; // Added prop
   onCellClick: (x: number, y: number) => void;
   onWallClick: (x: number, y: number, side: keyof WallState) => void;
 }
@@ -18,6 +19,7 @@ const Board: React.FC<BoardProps> = ({
   selectedPiece, 
   movedTo,
   phase, 
+  currentPlayer,
   onCellClick,
   onWallClick
 }) => {
@@ -30,10 +32,6 @@ const Board: React.FC<BoardProps> = ({
     <div className="aspect-square w-full max-w-[450px] relative">
       <div 
         className="grid grid-rows-7 h-full w-full border-[4px] border-[var(--ink)] bg-white/20"
-        style={{
-            // Creating the internal grid lines with gap or borders
-            // The reference CSS uses 'grid' with borders on cells, but grid gap is easier
-        }}
       >
         {board.map((row, y) => (
           <div key={`row-${y}`} className="grid grid-cols-7 h-full">
@@ -49,6 +47,7 @@ const Board: React.FC<BoardProps> = ({
                     isValidMove={isValidMove}
                     isSelected={isSelected}
                     isLastMoved={false} 
+                    currentPlayer={currentPlayer}
                     showGhostWalls={showGhostWalls}
                     onClick={() => onCellClick(x, y)}
                     onWallClick={(side) => onWallClick(x, y, side)}

@@ -6,6 +6,7 @@ interface CellProps {
   isValidMove: boolean;
   isSelected: boolean;
   isLastMoved: boolean;
+  currentPlayer?: Player; // Add current player to know which color to show
   onClick: () => void;
   showGhostWalls: boolean; 
   onWallClick: (side: 'top' | 'right' | 'bottom' | 'left') => void;
@@ -16,6 +17,7 @@ const Cell: React.FC<CellProps> = ({
   isValidMove, 
   isSelected, 
   isLastMoved,
+  currentPlayer,
   onClick, 
   showGhostWalls, 
   onWallClick 
@@ -24,9 +26,8 @@ const Cell: React.FC<CellProps> = ({
   // Base classes for the cell
   const baseClasses = "relative w-full h-full flex items-center justify-center border-box select-none";
   
-  // Interactions
-  // We use inline styles for colors to match the exact CSS variables from index.html
-  
+  const playerColorVar = currentPlayer === Player.RED ? 'var(--thread-red)' : 'var(--thread-blue)';
+
   return (
     <div 
       className={baseClasses}
@@ -35,13 +36,20 @@ const Cell: React.FC<CellProps> = ({
         onClick();
       }}
     >
-      {/* Grid Lines - subtle distinct borders handled by parent grid gap/border, 
-          but we can add a faint internal border if needed. 
-          The design shows a grid with solid borders. */}
-      
-      {/* Valid Move Marker (Stitched X or Dot) */}
+      {/* Valid Move Marker (Colored Background & Dot) */}
       {isValidMove && !cell.occupant && (
-        <div className="absolute w-3 h-3 rounded-full bg-[var(--thread-cyan)] opacity-50 animate-pulse" />
+        <>
+            {/* Subtle background tint */}
+            <div 
+                className="absolute inset-1 rounded-sm opacity-10"
+                style={{ backgroundColor: playerColorVar }}
+            />
+            {/* Center Dot */}
+            <div 
+                className="absolute w-3 h-3 rounded-full opacity-60 animate-pulse" 
+                style={{ backgroundColor: playerColorVar }}
+            />
+        </>
       )}
 
       {/* Selected Highlight */}
@@ -79,7 +87,6 @@ const Cell: React.FC<CellProps> = ({
       )}
 
       {/* --- WALLS --- */}
-      {/* Wall styles use the 'wall-stitch' classes defined in index.html */}
       
       {/* Top Wall */}
       {cell.walls.top && (

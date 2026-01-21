@@ -382,6 +382,7 @@ const App: React.FC = () => {
             selectedPiece={gameState.selectedPiece}
             movedTo={gameState.movedTo}
             phase={gameState.phase}
+            currentPlayer={gameState.currentPlayer}
             onCellClick={handleCellClick}
             onWallClick={handleWallClick}
          />
