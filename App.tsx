@@ -17,7 +17,7 @@ import {
   calculateScores,
   calculateLargestTerritory
 } from './utils/boardUtils';
-import { HelpCircle, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
 const RulesModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
   <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[var(--ink)]/80 backdrop-blur-sm animate-in fade-in duration-200">
