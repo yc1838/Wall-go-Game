@@ -1,5 +1,5 @@
 # Wall-go - Game Rules
-![Wall-go](game_screenshot.png)
+
 **Objective**
 Move your pieces on a 7×7 board and build walls to carve out your own ‘territory’ (an enclosed area containing only your pieces). When the game ends, count the squares in each player’s territory; the player with the most wins.
 

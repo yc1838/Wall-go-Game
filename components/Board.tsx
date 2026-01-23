@@ -29,7 +29,15 @@ const Board: React.FC<BoardProps> = ({
   };
 
   return (
-    <div className="aspect-square w-full max-w-[450px] relative">
+    /* 
+       Updated Container Constraints:
+       - absolute inset-0: Fills the relative parent (the <main>).
+       - m-auto: Centers content.
+       - aspect-square: Forces 1:1 ratio strictly.
+       - max-h-full max-w-full: Shrinks to fit whichever dimension is smaller.
+       This prevents squashing because width/height are derived from the limiting dimension + aspect ratio.
+    */
+    <div className="absolute inset-0 m-auto aspect-square max-h-full max-w-full shadow-sm">
       <div 
         className="grid grid-rows-7 h-full w-full border-[4px] border-[var(--ink)] bg-white/20"
       >

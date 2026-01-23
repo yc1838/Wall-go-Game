@@ -11,6 +11,11 @@ export enum GamePhase {
   GAME_OVER = 'GAME_OVER',
 }
 
+export enum GameMode {
+  PVP = 'PVP',
+  PVAI = 'PVAI'
+}
+
 export interface Coordinate {
   x: number;
   y: number;
@@ -38,6 +43,9 @@ export interface GameState {
   winner: Player | 'DRAW' | null;
   scores: { [key in Player]: number };
   
+  // Game Mode
+  gameMode: GameMode | null; // Null means we are in the menu
+  
   // Placement phase specific
   placementQueue: Player[]; // Who needs to place next
   
@@ -48,7 +56,10 @@ export interface GameState {
   
   // UI State
   showRules: boolean;
+  isAiThinking: boolean;
 }
+
+export type CounterSource = 'GLOBAL' | 'LOCAL' | 'OFFLINE';
 
 export const BOARD_SIZE = 7;
 export const TURN_TIME_LIMIT = 90; // seconds
