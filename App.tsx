@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
 import Board from './components/Board';
 import Controls from './components/Controls';
@@ -52,21 +53,26 @@ const RulesModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
         
         <section>
           <h3 className="mono font-bold text-sm mb-1">Objective</h3>
-          <p>Move your buttons and stitch walls to secure your territory. The tailor with the largest enclosed area wins.</p>
+          <p>Secure the largest territory. The game ends when all players are completely separated by walls.</p>
         </section>
         
         <section>
-          <h3 className="mono font-bold text-sm mb-1">The Ritual</h3>
+          <h3 className="mono font-bold text-sm mb-1">Phase 1: Placement</h3>
+          <p className="text-sm">Players take turns placing their buttons on the board. Each player places <strong>2 buttons</strong> in total.</p>
+        </section>
+
+        <section>
+          <h3 className="mono font-bold text-sm mb-1">Phase 2: Action</h3>
           <ol className="list-decimal pl-4 space-y-1 text-sm">
-            <li><strong>Select</strong> a button to move.</li>
-            <li><strong>Slide</strong> it 0, 1, or 2 spaces. No jumping over walls or other buttons.</li>
-            <li><strong>Stitch</strong> a wall on any open side of your landing spot.</li>
+            <li><strong>Select</strong> one of your buttons.</li>
+            <li><strong>Slide</strong> it 0, 1, or 2 spaces. (No jumping over obstacles).</li>
+            <li><strong>Stitch</strong> a wall on any open side of the square you landed on.</li>
           </ol>
         </section>
 
         <section>
           <h3 className="mono font-bold text-sm mb-1">Scoring</h3>
-          <p className="text-sm">Game ends when territories are separated. Count reachable squares. Largest territory breaks ties.</p>
+          <p className="text-sm">Count the total squares in your enclosed area. Highest score wins. Ties are broken by the largest single contiguous territory.</p>
         </section>
       </div>
     </div>
@@ -78,11 +84,12 @@ const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>({
     board: createInitialBoard(),
     currentPlayer: Player.RED,
+    activePlayers: [Player.RED, Player.BLUE], // Default 2
     phase: GamePhase.PLACEMENT,
     turnTimer: TURN_TIME_LIMIT,
     winner: null,
     scores: { [Player.RED]: 0, [Player.BLUE]: 0 },
-    placementQueue: [Player.RED, Player.BLUE, Player.BLUE, Player.RED],
+    placementQueue: [], 
     selectedPiece: null,
     validMoves: [],
     movedTo: null,
@@ -91,7 +98,7 @@ const App: React.FC = () => {
     isAiThinking: false
   });
 
-  const [playerNames, setPlayerNames] = useState<{ [key in Player]: string }>({
+  const [playerNames, setPlayerNames] = useState<{ [key in Player]?: string }>({
     [Player.RED]: 'Player 01',
     [Player.BLUE]: 'Player 02'
   });
@@ -127,37 +134,59 @@ const App: React.FC = () => {
 
   // --- Helpers ---
   
-  const switchPlayer = useCallback((current: Player) => {
-    return current === Player.RED ? Player.BLUE : Player.RED;
+  const switchPlayer = useCallback((current: Player, activePlayers: Player[]) => {
+    const idx = activePlayers.indexOf(current);
+    const nextIdx = (idx + 1) % activePlayers.length;
+    return activePlayers[nextIdx];
   }, []);
 
   const endTurn = useCallback(() => {
     setGameState(prev => {
       // Check for win condition
-      const isGameOver = checkGameEndCondition(prev.board);
+      const isGameOver = checkGameEndCondition(prev.board, prev.activePlayers);
       
       if (isGameOver) {
         // Calculate scores
-        const scores = calculateScores(prev.board);
+        const scores = calculateScores(prev.board, prev.activePlayers);
         let winner: Player | 'DRAW' | null = null;
+        let maxScore = -1;
         
-        if (scores[Player.RED] > scores[Player.BLUE]) winner = Player.RED;
-        else if (scores[Player.BLUE] > scores[Player.RED]) winner = Player.BLUE;
-        else {
-          // Tie breaker: Largest single territory
-          const redMax = calculateLargestTerritory(prev.board, Player.RED);
-          const blueMax = calculateLargestTerritory(prev.board, Player.BLUE);
-          if (redMax > blueMax) winner = Player.RED;
-          else if (blueMax > redMax) winner = Player.BLUE;
-          else winner = 'DRAW';
+        // Find highest score
+        prev.activePlayers.forEach(p => {
+            const s = scores[p] || 0;
+            if (s > maxScore) maxScore = s;
+        });
+
+        // Identify candidates with max score
+        const candidates = prev.activePlayers.filter(p => (scores[p] || 0) === maxScore);
+
+        if (candidates.length === 1) {
+            winner = candidates[0];
+        } else {
+            // Tie breaker: Largest single territory
+            let maxTerritory = -1;
+            let territoryWinner: Player | null = null;
+            let tie = false;
+
+            candidates.forEach(p => {
+                const t = calculateLargestTerritory(prev.board, p);
+                if (t > maxTerritory) {
+                    maxTerritory = t;
+                    territoryWinner = p;
+                    tie = false;
+                } else if (t === maxTerritory) {
+                    tie = true;
+                }
+            });
+
+            winner = tie ? 'DRAW' : territoryWinner;
         }
 
         // --- TRACKING: GAME COMPLETE ---
         logEvent('game_complete', {
           winner: winner,
           mode: prev.gameMode,
-          score_red: scores[Player.RED],
-          score_blue: scores[Player.BLUE]
+          players: prev.activePlayers.length
         });
 
         return {
@@ -172,7 +201,7 @@ const App: React.FC = () => {
       // If not game over, switch player
       return {
         ...prev,
-        currentPlayer: switchPlayer(prev.currentPlayer),
+        currentPlayer: switchPlayer(prev.currentPlayer, prev.activePlayers),
         phase: GamePhase.ACTION_SELECT,
         turnTimer: TURN_TIME_LIMIT,
         selectedPiece: null,
@@ -186,11 +215,14 @@ const App: React.FC = () => {
   // --- AI TRIGGER EFFECT ---
   // This detects when it's the AI's turn and sets the "Thinking" flag.
   useEffect(() => {
+    // TRIGGER CONDITION:
+    // It is PVAI mode AND it is AI's turn (BLUE) AND AI is not currently thinking.
+    // Works for both PLACEMENT and ACTION phases.
     if (
         gameState.gameMode === GameMode.PVAI && 
         gameState.currentPlayer === Player.BLUE && 
-        gameState.phase === GamePhase.ACTION_SELECT &&
-        !gameState.isAiThinking
+        !gameState.isAiThinking &&
+        (gameState.phase === GamePhase.ACTION_SELECT || gameState.phase === GamePhase.PLACEMENT)
     ) {
         setGameState(prev => ({ ...prev, isAiThinking: true }));
     }
@@ -198,40 +230,82 @@ const App: React.FC = () => {
 
   // --- AI EXECUTION EFFECT ---
   // This watches ONLY the "Thinking" flag. When true, it runs the logic.
-  // We split this from the Trigger Effect to avoid the cleanup-cancellation bug.
   useEffect(() => {
     if (!gameState.isAiThinking) return;
 
     // Use a timeout to allow the UI to render the "Thinking" state first
     const aiTimer = setTimeout(() => {
         try {
-            const bestMove = calculateBestMove(gameState.board, Player.BLUE, Player.RED);
-
-            if (bestMove) {
-                // Apply the move logic
+            if (gameState.phase === GamePhase.PLACEMENT) {
+                // --- AI PLACEMENT LOGIC ---
+                // Randomly select an empty spot
                 setGameState(prev => {
-                    const newBoard = prev.board.map(r => r.map(c => ({...c, walls: {...c.walls}})));
+                    const emptyCells: Coordinate[] = [];
+                    prev.board.forEach(row => row.forEach(cell => {
+                        if (!cell.occupant) emptyCells.push({x: cell.x, y: cell.y});
+                    }));
                     
-                    // Move Piece
-                    newBoard[bestMove.from.y][bestMove.from.x].occupant = null;
-                    newBoard[bestMove.to.y][bestMove.to.x].occupant = Player.BLUE;
+                    if (emptyCells.length === 0) return prev; // Should not happen
                     
-                    // Place Wall
-                    const boardWithWall = placeWall(newBoard, bestMove.to.x, bestMove.to.y, bestMove.wallSide, Player.BLUE);
+                    // Simple logic: prefer somewhat central but random positions
+                    // Or purely random for variety
+                    const choice = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+                    
+                    // Apply Placement
+                    const newBoard = prev.board.map(r => r.map(c => ({...c})));
+                    newBoard[choice.y][choice.x].occupant = Player.BLUE;
+                    
+                    // Handle Queue
+                    const newQueue = [...prev.placementQueue];
+                    const nextPlayer = newQueue.shift();
 
-                    return {
-                        ...prev,
-                        board: boardWithWall,
-                        phase: GamePhase.ACTION_WALL, 
-                        movedTo: bestMove.to 
-                    };
+                    if (!nextPlayer) {
+                         // End of Placement
+                         return {
+                             ...prev,
+                             board: newBoard,
+                             phase: GamePhase.ACTION_SELECT,
+                             currentPlayer: Player.RED,
+                             turnTimer: TURN_TIME_LIMIT,
+                             isAiThinking: false
+                         };
+                    } else {
+                         return {
+                             ...prev,
+                             board: newBoard,
+                             currentPlayer: nextPlayer,
+                             placementQueue: newQueue,
+                             isAiThinking: false
+                         };
+                    }
                 });
 
-                // Short delay before officially ending turn so user sees the move
-                setTimeout(() => endTurn(), 300);
             } else {
-                // Fallback if trapped
-                endTurn();
+                // --- AI MOVEMENT LOGIC (Existing) ---
+                const bestMove = calculateBestMove(gameState.board, Player.BLUE, Player.RED);
+
+                if (bestMove) {
+                    setGameState(prev => {
+                        const newBoard = prev.board.map(r => r.map(c => ({...c, walls: {...c.walls}})));
+                        
+                        // Move Piece
+                        newBoard[bestMove.from.y][bestMove.from.x].occupant = null;
+                        newBoard[bestMove.to.y][bestMove.to.x].occupant = Player.BLUE;
+                        
+                        // Place Wall
+                        const boardWithWall = placeWall(newBoard, bestMove.to.x, bestMove.to.y, bestMove.wallSide, Player.BLUE);
+
+                        return {
+                            ...prev,
+                            board: boardWithWall,
+                            phase: GamePhase.ACTION_WALL, 
+                            movedTo: bestMove.to 
+                        };
+                    });
+                    setTimeout(() => endTurn(), 300);
+                } else {
+                    endTurn();
+                }
             }
         } catch (error) {
             console.error("AI Crashed:", error);
@@ -240,7 +314,7 @@ const App: React.FC = () => {
     }, 500);
 
     return () => clearTimeout(aiTimer);
-  }, [gameState.isAiThinking, gameState.board, endTurn]); // Dependencies needed for calculation
+  }, [gameState.isAiThinking, gameState.phase, gameState.board, endTurn]);
 
 
   // Handle Random Wall (Timeout)
@@ -265,11 +339,20 @@ const App: React.FC = () => {
            }
         }
 
-        if (pieceX === -1) return prev; 
+        if (pieceX === -1) {
+            return {
+                ...prev,
+                currentPlayer: switchPlayer(prev.currentPlayer, prev.activePlayers),
+                phase: GamePhase.ACTION_SELECT,
+                turnTimer: TURN_TIME_LIMIT,
+                selectedPiece: null,
+                validMoves: [],
+                movedTo: null,
+                isAiThinking: false
+            };
+        }
 
-        // Try to place wall on any open side
         const sides: (keyof WallState)[] = ['top', 'right', 'bottom', 'left'];
-        // Shuffle sides
         for (let i = sides.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [sides[i], sides[j]] = [sides[j], sides[i]];
@@ -278,34 +361,20 @@ const App: React.FC = () => {
         let newBoard = prev.board;
         
         for (const side of sides) {
-            // Check if wall exists (it's null if not exists)
             if (!prev.board[pieceY][pieceX].walls[side]) {
                  newBoard = placeWall(prev.board, pieceX, pieceY, side, prev.currentPlayer);
                  break;
             }
         }
         
-        // CHECK GAME END
-        const isGameOver = checkGameEndCondition(newBoard);
+        const isGameOver = checkGameEndCondition(newBoard, prev.activePlayers);
         if (isGameOver) {
-             const scores = calculateScores(newBoard);
-             let winner: Player | 'DRAW' | null = null;
-             if (scores[Player.RED] > scores[Player.BLUE]) winner = Player.RED;
-             else if (scores[Player.BLUE] > scores[Player.RED]) winner = Player.BLUE;
-             else winner = 'DRAW'; 
-             
-             // --- TRACKING: GAME COMPLETE (TIMEOUT) ---
-             logEvent('game_complete', {
-                winner: winner,
-                mode: prev.gameMode,
-                reason: 'timeout_random_wall'
-             });
-
+             const scores = calculateScores(newBoard, prev.activePlayers);
              return {
                  ...prev,
                  board: newBoard,
                  phase: GamePhase.GAME_OVER,
-                 winner,
+                 winner: null,
                  scores,
                  isAiThinking: false
              };
@@ -314,7 +383,7 @@ const App: React.FC = () => {
         return {
             ...prev,
             board: newBoard,
-            currentPlayer: switchPlayer(prev.currentPlayer),
+            currentPlayer: switchPlayer(prev.currentPlayer, prev.activePlayers),
             phase: GamePhase.ACTION_SELECT,
             turnTimer: TURN_TIME_LIMIT,
             selectedPiece: null,
@@ -327,6 +396,7 @@ const App: React.FC = () => {
 
   // --- Timer Effect ---
   useEffect(() => {
+    // Timer is paused during Placement to reduce pressure
     if (gameState.phase === GamePhase.GAME_OVER || gameState.phase === GamePhase.PLACEMENT || !gameState.gameMode) return;
 
     timerRef.current = window.setInterval(() => {
@@ -352,63 +422,51 @@ const App: React.FC = () => {
   }, [gameState.turnTimer, gameState.phase, handleRandomWallPlacement]);
 
 
-  // --- Initialization Effect (Placement Phase Setup) ---
-  useEffect(() => {
-    setGameState(prev => {
-        const newBoard = [...prev.board];
-        // Red Fixed
-        newBoard[1][1] = { ...newBoard[1][1], occupant: Player.RED };
-        newBoard[5][5] = { ...newBoard[5][5], occupant: Player.RED };
-        // Blue Fixed
-        newBoard[5][1] = { ...newBoard[5][1], occupant: Player.BLUE };
-        newBoard[1][5] = { ...newBoard[1][5], occupant: Player.BLUE };
-        
-        return { ...prev, board: newBoard };
-    });
-  }, []);
-
   // --- Interaction Handlers ---
 
   const handleCellClick = (x: number, y: number) => {
     // Block interaction if Game Over OR if AI is thinking
     if (gameState.phase === GamePhase.GAME_OVER || gameState.isAiThinking) return;
     
-    // Also block if it's AI turn (extra safety)
+    // Block if it's AI turn
     if (gameState.gameMode === GameMode.PVAI && gameState.currentPlayer === Player.BLUE) return;
 
-    // --- PLACEMENT PHASE ---
+    // --- PHASE: PLACEMENT ---
     if (gameState.phase === GamePhase.PLACEMENT) {
-        if (gameState.board[y][x].occupant !== null) return; 
+        if (gameState.board[y][x].occupant === null) {
+            // Place Piece
+            const newBoard = gameState.board.map(r => r.map(c => ({...c})));
+            newBoard[y][x].occupant = gameState.currentPlayer;
 
-        const currentPlayerToPlace = gameState.placementQueue[0];
-        if (!currentPlayerToPlace) return; 
+            // Update State & Queue
+            setGameState(prev => {
+                const newQueue = [...prev.placementQueue];
+                const nextPlayer = newQueue.shift();
 
-        const newBoard = gameState.board.map(r => [...r]);
-        newBoard[y][x] = { ...newBoard[y][x], occupant: currentPlayerToPlace };
-
-        const newQueue = gameState.placementQueue.slice(1);
-        
-        if (newQueue.length === 0) {
-            // All placed, start game
-            setGameState(prev => ({
-                ...prev,
-                board: newBoard,
-                phase: GamePhase.ACTION_SELECT,
-                placementQueue: [],
-                currentPlayer: Player.RED // Red starts action phase
-            }));
-        } else {
-            setGameState(prev => ({
-                ...prev,
-                board: newBoard,
-                placementQueue: newQueue,
-                currentPlayer: newQueue[0]
-            }));
+                if (!nextPlayer) {
+                    // Start Game!
+                    return {
+                        ...prev,
+                        board: newBoard,
+                        phase: GamePhase.ACTION_SELECT,
+                        currentPlayer: Player.RED, // Player 1 always starts movement? Or next in rotation? usually P1.
+                        turnTimer: TURN_TIME_LIMIT,
+                        placementQueue: []
+                    };
+                } else {
+                    return {
+                        ...prev,
+                        board: newBoard,
+                        currentPlayer: nextPlayer,
+                        placementQueue: newQueue
+                    };
+                }
+            });
         }
         return;
     }
 
-    // --- ACTION: SELECT PIECE ---
+    // --- PHASE: SELECT PIECE ---
     if (gameState.phase === GamePhase.ACTION_SELECT) {
         const cell = gameState.board[y][x];
         if (cell.occupant === gameState.currentPlayer) {
@@ -423,7 +481,7 @@ const App: React.FC = () => {
         return;
     }
 
-    // --- ACTION: MOVE PIECE ---
+    // --- PHASE: MOVE PIECE ---
     if (gameState.phase === GamePhase.ACTION_MOVE) {
         const isValid = gameState.validMoves.some(m => m.x === x && m.y === y);
         
@@ -440,6 +498,7 @@ const App: React.FC = () => {
                 phase: GamePhase.ACTION_WALL
             }));
         } else if (gameState.board[y][x].occupant === gameState.currentPlayer) {
+            // Allow changing selection
             const moves = getValidMoves(gameState.board, { x, y });
             setGameState(prev => ({
                 ...prev,
@@ -476,19 +535,16 @@ const App: React.FC = () => {
       }));
   };
 
-  const handleStartGame = (mode: GameMode, names: { [key in Player]: string }) => {
+  const handleStartGame = (mode: GameMode, playerCount: number, names: { [key in Player]?: string }) => {
       // --- TRACKING: GAME START (GA4) ---
       logEvent('game_start', {
         mode: mode,
-        player1: names[Player.RED],
-        player2: names[Player.BLUE]
+        players: playerCount,
       });
 
       // --- HYBRID INCREMENT ---
       // Optimistic update first
       setMatchCount(prev => (prev || 0) + 1);
-
-      // Perform actual increment and update with REAL global data if successful
       incrementMatchCount().then(newGlobalCount => {
           if (newGlobalCount) {
              setMatchCount(newGlobalCount);
@@ -496,7 +552,27 @@ const App: React.FC = () => {
           }
       });
 
-      setGameState(prev => ({ ...prev, gameMode: mode }));
+      const activePlayers = [Player.RED, Player.BLUE, Player.GREEN, Player.YELLOW].slice(0, playerCount);
+
+      // Create Placement Queue
+      // Each player places 2 pieces. 
+      // Order: P1, P2, P3... then P1, P2, P3...
+      let queue: Player[] = [];
+      for(let i=0; i<2; i++) { 
+          queue = queue.concat(activePlayers);
+      }
+      
+      // Setup Game for Placement Phase
+      setGameState(prev => ({ 
+          ...prev, 
+          gameMode: mode,
+          activePlayers,
+          currentPlayer: queue[0], // First player to place
+          placementQueue: queue.slice(1), // Remaining queue
+          board: createInitialBoard(),
+          phase: GamePhase.PLACEMENT,
+          scores: activePlayers.reduce((acc, p) => ({...acc, [p]: 0}), {})
+      }));
       setPlayerNames(names);
   };
 
@@ -504,20 +580,15 @@ const App: React.FC = () => {
     // --- TRACKING: GAME RESET ---
     logEvent('game_reset');
 
-    const freshBoard = createInitialBoard();
-    freshBoard[1][1].occupant = Player.RED;
-    freshBoard[5][5].occupant = Player.RED;
-    freshBoard[5][1].occupant = Player.BLUE;
-    freshBoard[1][5].occupant = Player.BLUE;
-
     setGameState({
-        board: freshBoard,
+        board: createInitialBoard(),
         currentPlayer: Player.RED,
+        activePlayers: [Player.RED, Player.BLUE],
         phase: GamePhase.PLACEMENT,
         turnTimer: TURN_TIME_LIMIT,
         winner: null,
         scores: { [Player.RED]: 0, [Player.BLUE]: 0 },
-        placementQueue: [Player.RED, Player.BLUE, Player.BLUE, Player.RED],
+        placementQueue: [],
         selectedPiece: null,
         validMoves: [],
         movedTo: null,
@@ -526,57 +597,6 @@ const App: React.FC = () => {
         isAiThinking: false
     });
   };
-
-  // Auto-Placement for AI (Blue) during placement phase
-  useEffect(() => {
-    if (gameState.gameMode === GameMode.PVAI && 
-        gameState.phase === GamePhase.PLACEMENT && 
-        gameState.placementQueue.length > 0 && 
-        gameState.placementQueue[0] === Player.BLUE) {
-        
-        const timer = setTimeout(() => {
-            setGameState(prev => {
-                // Find first empty slot (simple logic for placement)
-                let tx = -1, ty = -1;
-                const emptySpots: Coordinate[] = [];
-                for(let y=0; y<7; y++) {
-                    for(let x=0; x<7; x++) {
-                         if(prev.board[y][x].occupant === null) emptySpots.push({x,y});
-                    }
-                }
-                
-                if (emptySpots.length > 0) {
-                    const randomIdx = Math.floor(Math.random() * emptySpots.length);
-                    tx = emptySpots[randomIdx].x;
-                    ty = emptySpots[randomIdx].y;
-                }
-
-                if (tx === -1) return prev; 
-
-                const newBoard = prev.board.map(r => [...r]);
-                newBoard[ty][tx] = { ...newBoard[ty][tx], occupant: Player.BLUE };
-
-                const newQueue = prev.placementQueue.slice(1);
-                const nextState = {
-                    ...prev,
-                    board: newBoard,
-                    placementQueue: newQueue,
-                };
-
-                if (newQueue.length === 0) {
-                    nextState.phase = GamePhase.ACTION_SELECT;
-                    nextState.placementQueue = [];
-                    nextState.currentPlayer = Player.RED;
-                } else {
-                    nextState.currentPlayer = newQueue[0];
-                }
-                return nextState;
-            });
-        }, 600);
-        return () => clearTimeout(timer);
-    }
-  }, [gameState.gameMode, gameState.phase, gameState.placementQueue]);
-
 
   return (
     <div className="game-canvas flex flex-col justify-between w-[95vw] max-w-md h-[92vh] max-h-[900px] rounded-sm p-4 z-10 relative overflow-hidden">
@@ -629,7 +649,9 @@ const App: React.FC = () => {
              <div className="absolute inset-0 z-30 flex items-center justify-center bg-[var(--parchment)]/20 backdrop-blur-[1px]">
                  <div className="bg-[var(--ink)] text-[var(--parchment)] px-4 py-2 rounded-sm flex items-center gap-2 shadow-lg animate-pulse">
                      <Loader2 className="animate-spin" size={16} />
-                     <span className="mono text-xs tracking-widest">CALCULATING</span>
+                     <span className="mono text-xs tracking-widest">
+                         {gameState.phase === GamePhase.PLACEMENT ? 'CHOOSING START' : 'CALCULATING'}
+                     </span>
                  </div>
              </div>
          )}
@@ -657,7 +679,7 @@ const App: React.FC = () => {
             scores={gameState.scores}
             isAiThinking={gameState.isAiThinking}
             gameMode={gameState.gameMode}
-            isCompact={isCompact} 
+            activePlayers={gameState.activePlayers}
             playerNames={playerNames}
         />
       </footer>

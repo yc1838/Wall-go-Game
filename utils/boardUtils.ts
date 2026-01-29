@@ -1,3 +1,4 @@
+
 import { BOARD_SIZE, CellData, Coordinate, Player, WallState } from '../types';
 
 // Create initial empty board
@@ -138,63 +139,75 @@ export const getReachableArea = (board: CellData[][], player: Player): Set<strin
   return visited;
 };
 
-export const checkGameEndCondition = (board: CellData[][]): boolean => {
-  // Game ends when Red pieces cannot reach Blue pieces.
+// MULTI-PLAYER END CONDITION CHECK
+export const checkGameEndCondition = (board: CellData[][], activePlayers: Player[]): boolean => {
+  // Game ends when NO player can reach ANY OTHER player's pieces.
+  // We need to check connectivity between every pair of active players.
   
-  const queue: Coordinate[] = [];
-  const visited = new Set<string>();
+  // 1. Map each player to their set of reachable coordinates (using BFS)
+  // Note: getReachableArea stops at occupants, but effectively we want to see if territories touch.
   
-  // Start from all Red pieces
-  for(let y=0; y<BOARD_SIZE; y++) {
-    for(let x=0; x<BOARD_SIZE; x++) {
-      if (board[y][x].occupant === Player.RED) {
-        queue.push({x,y});
-        visited.add(`${x},${y}`);
+  // Optimized approach: 
+  // Run BFS from Player A. If we encounter a piece belonging to Player B, then A and B are connected.
+  
+  for (let i = 0; i < activePlayers.length; i++) {
+      const p1 = activePlayers[i];
+      
+      const queue: Coordinate[] = [];
+      const visited = new Set<string>();
+      
+      // Init with P1 pieces
+      for(let y=0; y<BOARD_SIZE; y++) {
+        for(let x=0; x<BOARD_SIZE; x++) {
+          if (board[y][x].occupant === p1) {
+            queue.push({x,y});
+            visited.add(`${x},${y}`);
+          }
+        }
       }
-    }
-  }
 
-  while(queue.length > 0) {
-    const curr = queue.shift()!;
-    const directions = [
-        { dx: 0, dy: -1 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 1, dy: 0 }
-    ];
+      // BFS
+      while(queue.length > 0) {
+        const curr = queue.shift()!;
+        const directions = [{dx:0,dy:-1},{dx:0,dy:1},{dx:-1,dy:0},{dx:1,dy:0}];
 
-    for (const dir of directions) {
-        const nx = curr.x + dir.dx;
-        const ny = curr.y + dir.dy;
-        
-        if (isValidCoordinate({x: nx, y: ny})) {
-            const currentCell = board[curr.y][curr.x];
-            const nextCell = board[ny][nx];
-            const key = `${nx},${ny}`;
+        for (const dir of directions) {
+            const nx = curr.x + dir.dx;
+            const ny = curr.y + dir.dy;
+            
+            if (isValidCoordinate({x:nx, y:ny})) {
+                const currentCell = board[curr.y][curr.x];
+                const nextCell = board[ny][nx];
+                const key = `${nx},${ny}`;
 
-            if (!isBlocked(currentCell, nextCell)) {
-                // If we found a BLUE piece, there is still a path!
-                if (nextCell.occupant === Player.BLUE) {
-                    return false; // Not separated yet
-                }
-                
-                if (nextCell.occupant === null && !visited.has(key)) {
-                    visited.add(key);
-                    queue.push({x: nx, y: ny});
+                if (!isBlocked(currentCell, nextCell)) {
+                    // Check if we hit another player
+                    if (nextCell.occupant && nextCell.occupant !== p1 && activePlayers.includes(nextCell.occupant)) {
+                        return false; // Connection found! Game not over.
+                    }
+                    
+                    if (nextCell.occupant === null && !visited.has(key)) {
+                        visited.add(key);
+                        queue.push({x: nx, y: ny});
+                    }
                 }
             }
         }
-    }
+      }
   }
 
-  return true; // No path found to any Blue piece
+  // If we finish the loops without returning false, it means no player can reach any other player.
+  return true;
 };
 
-export const calculateScores = (board: CellData[][]): { [key in Player]: number } => {
-  const redReach = getReachableArea(board, Player.RED);
-  const blueReach = getReachableArea(board, Player.BLUE);
+export const calculateScores = (board: CellData[][], activePlayers: Player[]): { [key in Player]?: number } => {
+  const scores: { [key in Player]?: number } = {};
   
-  return {
-    [Player.RED]: redReach.size,
-    [Player.BLUE]: blueReach.size
-  };
+  activePlayers.forEach(p => {
+      scores[p] = getReachableArea(board, p).size;
+  });
+  
+  return scores;
 };
 
 export const calculateLargestTerritory = (board: CellData[][], player: Player): number => {

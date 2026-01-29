@@ -1,47 +1,86 @@
-import React, { useEffect } from 'react';
+
+import React from 'react';
 import { CounterSource, GameMode, Player } from '../types';
-import { Bot, Users, ArrowRight, ChevronLeft, Globe, Database } from 'lucide-react';
+import { Bot, Users, ArrowRight, ChevronLeft, Globe, Database, UserPlus } from 'lucide-react';
 
 interface StartScreenProps {
-  onStart: (mode: GameMode, names: { [key in Player]: string }) => void;
+  onStart: (mode: GameMode, playerCount: number, names: { [key in Player]?: string }) => void;
   matchCount: number | null;
   countSource: CounterSource;
   isLoadingCount: boolean;
 }
 
 const StartScreen: React.FC<StartScreenProps> = ({ onStart, matchCount, countSource, isLoadingCount }) => {
-  const [step, setStep] = React.useState<'MODE' | 'NAMES'>('MODE');
+  const [step, setStep] = React.useState<'MODE' | 'COUNT' | 'NAMES'>('MODE');
   const [selectedMode, setSelectedMode] = React.useState<GameMode | null>(null);
-  const [p1Name, setP1Name] = React.useState('');
-  const [p2Name, setP2Name] = React.useState('');
+  const [playerCount, setPlayerCount] = React.useState(2);
+  
+  const [names, setNames] = React.useState<{ [key: string]: string }>({
+      [Player.RED]: '',
+      [Player.BLUE]: '',
+      [Player.GREEN]: '',
+      [Player.YELLOW]: ''
+  });
 
   const handleModeSelect = (mode: GameMode) => {
     setSelectedMode(mode);
-    setStep('NAMES');
     if (mode === GameMode.PVAI) {
-      setP2Name('Automata');
+        setPlayerCount(2); // AI only supports 2 players
+        setStep('NAMES');
+        setNames(prev => ({ ...prev, [Player.BLUE]: 'Automata' }));
     } else {
-      setP2Name('');
+        setStep('COUNT'); // Go to count selection for PVP
     }
   };
 
+  const handleCountSelect = (count: number) => {
+      setPlayerCount(count);
+      setStep('NAMES');
+  };
+
   const handleBack = () => {
-    setStep('MODE');
-    setSelectedMode(null);
+    if (step === 'NAMES') {
+        if (selectedMode === GameMode.PVAI) {
+            setStep('MODE');
+            setSelectedMode(null);
+        } else {
+            setStep('COUNT');
+        }
+    } else if (step === 'COUNT') {
+        setStep('MODE');
+        setSelectedMode(null);
+    }
+  };
+
+  const updateName = (p: Player, val: string) => {
+      setNames(prev => ({ ...prev, [p]: val }));
   };
 
   const handleStart = () => {
     if (!selectedMode) return;
-    onStart(selectedMode, {
-        [Player.RED]: p1Name.trim() || 'Player 01',
-        [Player.BLUE]: p2Name.trim() || (selectedMode === GameMode.PVAI ? 'Automata' : 'Player 02')
+    
+    // Fill defaults
+    const finalNames: { [key in Player]?: string } = {};
+    const defaultNames = {
+        [Player.RED]: 'Crimson',
+        [Player.BLUE]: selectedMode === GameMode.PVAI ? 'Automata' : 'Azure',
+        [Player.GREEN]: 'Emerald',
+        [Player.YELLOW]: 'Golden'
+    };
+
+    const players = [Player.RED, Player.BLUE, Player.GREEN, Player.YELLOW].slice(0, playerCount);
+    
+    players.forEach(p => {
+        finalNames[p] = names[p]?.trim() || defaultNames[p];
     });
+
+    onStart(selectedMode, playerCount, finalNames);
   };
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-6 bg-[var(--parchment)]/95 backdrop-blur-sm animate-in fade-in zoom-in duration-300">
+    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-6 bg-[var(--parchment)]/95 backdrop-blur-sm animate-in fade-in zoom-in duration-300 overflow-y-auto">
       
-      <div className="text-center mb-8 w-full max-w-xs">
+      <div className="text-center mb-6 w-full max-w-xs shrink-0">
         <div className="flex flex-col items-center gap-1 mb-2">
             <span className="mono text-xs opacity-60 tracking-widest">SESSION // NEW</span>
             
@@ -63,22 +102,14 @@ const StartScreen: React.FC<StartScreenProps> = ({ onStart, matchCount, countSou
             </div>
         </div>
 
-        <h1 className="font-serif text-4xl font-bold italic text-[var(--ink)] mb-2 mt-2">
+        <h1 className="font-serif text-4xl font-bold italic text-[var(--ink)] mb-1 mt-2 leading-none">
             Stitched<br/>Territory
         </h1>
-        {step === 'MODE' ? (
-          <p className="font-serif italic text-sm opacity-80 max-w-[200px] mx-auto">
-            Choose your opponent in the battle of threads.
-          </p>
-        ) : (
-          <p className="font-serif italic text-sm opacity-80 max-w-[200px] mx-auto">
-             Enter the names of the tailors.
-          </p>
-        )}
       </div>
 
-      {step === 'MODE' ? (
+      {step === 'MODE' && (
         <div className="flex flex-col gap-4 w-full max-w-xs">
+           <p className="font-serif italic text-sm opacity-80 text-center mb-2">Choose your opponent.</p>
           <button 
             onClick={() => handleModeSelect(GameMode.PVAI)}
             className="group relative flex items-center p-4 border-2 border-[var(--ink)] hover:bg-[var(--ink)] transition-colors text-left"
@@ -101,60 +132,74 @@ const StartScreen: React.FC<StartScreenProps> = ({ onStart, matchCount, countSou
             </div>
             <div className="flex flex-col group-hover:text-[var(--parchment)]">
               <span className="font-serif font-bold text-lg leading-none mb-1">Duel of Tailors</span>
-              <span className="mono text-[0.6rem] uppercase tracking-wider opacity-70">Pass & Play (2 Players)</span>
+              <span className="mono text-[0.6rem] uppercase tracking-wider opacity-70">Pass & Play (Multiplayer)</span>
             </div>
           </button>
         </div>
-      ) : (
-        <div className="flex flex-col gap-6 w-full max-w-xs animate-in slide-in-from-right duration-300">
+      )}
+
+      {step === 'COUNT' && (
+          <div className="flex flex-col gap-4 w-full max-w-xs animate-in slide-in-from-right duration-300">
+             <p className="font-serif italic text-sm opacity-80 text-center mb-2">How many tailors?</p>
+             {[2, 3, 4].map(count => (
+                 <button
+                    key={count}
+                    onClick={() => handleCountSelect(count)}
+                    className="p-4 border border-[var(--ink)] hover:bg-[var(--ink)] hover:text-[var(--parchment)] transition-colors font-serif font-bold text-xl flex justify-between items-center"
+                 >
+                    <span>{count} Players</span>
+                    <div className="flex gap-1">
+                        {Array.from({length: count}).map((_, i) => (
+                            <div key={i} className="w-2 h-2 rounded-full bg-current opacity-60" />
+                        ))}
+                    </div>
+                 </button>
+             ))}
+             <button onClick={handleBack} className="mt-4 text-xs mono border-b border-transparent hover:border-[var(--ink)] self-center">BACK</button>
+          </div>
+      )}
+
+      {step === 'NAMES' && (
+        <div className="flex flex-col gap-4 w-full max-w-xs animate-in slide-in-from-right duration-300">
+           <p className="font-serif italic text-sm opacity-80 text-center mb-2">Identity your threads.</p>
            
-           {/* Player 1 Input */}
-           <div className="flex flex-col gap-1">
-              <label className="mono text-[0.6rem] font-bold opacity-60 ml-1">Crimson (Player 01)</label>
-              <input 
-                type="text" 
-                value={p1Name}
-                onChange={(e) => setP1Name(e.target.value)}
-                placeholder="Enter Name"
-                className="w-full bg-white/50 border-b-2 border-[var(--ink)] p-2 font-serif text-lg focus:outline-none focus:bg-white/80 transition-colors placeholder:italic placeholder:opacity-40"
-                autoFocus
-              />
+           <div className="flex flex-col gap-3">
+               <div className="flex flex-col gap-1">
+                  <label className="mono text-[0.6rem] font-bold opacity-60 ml-1 text-[var(--thread-red)]">Red Tailor</label>
+                  <input type="text" value={names[Player.RED]} onChange={(e) => updateName(Player.RED, e.target.value)} placeholder="Crimson" className="w-full bg-white/50 border-b-2 border-[var(--ink)] p-2 font-serif focus:outline-none" />
+               </div>
+               
+               <div className="flex flex-col gap-1">
+                  <label className="mono text-[0.6rem] font-bold opacity-60 ml-1 text-[var(--thread-blue)]">Blue Tailor</label>
+                  <input type="text" value={names[Player.BLUE]} onChange={(e) => updateName(Player.BLUE, e.target.value)} placeholder={selectedMode === GameMode.PVAI ? "Automata" : "Azure"} disabled={selectedMode === GameMode.PVAI} className="w-full bg-white/50 border-b-2 border-[var(--ink)] p-2 font-serif focus:outline-none disabled:opacity-50" />
+               </div>
+
+               {playerCount > 2 && (
+                   <div className="flex flex-col gap-1 animate-in fade-in">
+                      <label className="mono text-[0.6rem] font-bold opacity-60 ml-1 text-[var(--thread-green)]">Green Tailor</label>
+                      <input type="text" value={names[Player.GREEN]} onChange={(e) => updateName(Player.GREEN, e.target.value)} placeholder="Emerald" className="w-full bg-white/50 border-b-2 border-[var(--ink)] p-2 font-serif focus:outline-none" />
+                   </div>
+               )}
+
+               {playerCount > 3 && (
+                   <div className="flex flex-col gap-1 animate-in fade-in">
+                      <label className="mono text-[0.6rem] font-bold opacity-60 ml-1 text-[var(--thread-yellow)]">Yellow Tailor</label>
+                      <input type="text" value={names[Player.YELLOW]} onChange={(e) => updateName(Player.YELLOW, e.target.value)} placeholder="Golden" className="w-full bg-white/50 border-b-2 border-[var(--ink)] p-2 font-serif focus:outline-none" />
+                   </div>
+               )}
            </div>
 
-           {/* Player 2 Input */}
-           <div className="flex flex-col gap-1">
-              <label className="mono text-[0.6rem] font-bold opacity-60 ml-1">Azure (Player 02)</label>
-              <input 
-                type="text" 
-                value={p2Name}
-                onChange={(e) => setP2Name(e.target.value)}
-                placeholder={selectedMode === GameMode.PVAI ? "Automata" : "Enter Name"}
-                disabled={selectedMode === GameMode.PVAI}
-                className="w-full bg-white/50 border-b-2 border-[var(--ink)] p-2 font-serif text-lg focus:outline-none focus:bg-white/80 transition-colors placeholder:italic placeholder:opacity-40 disabled:opacity-50 disabled:cursor-not-allowed"
-              />
-           </div>
-
-           <div className="flex gap-3 mt-2">
-             <button 
-               onClick={handleBack}
-               className="p-3 border border-[var(--ink)] hover:bg-black/5 transition-colors rounded-sm"
-             >
-               <ChevronLeft size={20} />
-             </button>
-             <button 
-               onClick={handleStart}
-               className="flex-1 bg-[var(--ink)] text-[var(--parchment)] font-serif font-bold text-lg p-3 hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
-             >
+           <div className="flex gap-3 mt-4">
+             <button onClick={handleBack} className="p-3 border border-[var(--ink)] hover:bg-black/5 transition-colors rounded-sm"><ChevronLeft size={20} /></button>
+             <button onClick={handleStart} className="flex-1 bg-[var(--ink)] text-[var(--parchment)] font-serif font-bold text-lg p-3 hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
                BEGIN RITUAL <ArrowRight size={18} />
              </button>
            </div>
         </div>
       )}
 
-      <div className="mt-8 text-center">
-        <p className="mono text-[0.55rem] opacity-40">
-            SYSTEM V1.0 // SEAMLESS INTEGRATION
-        </p>
+      <div className="mt-6 text-center shrink-0">
+        <p className="mono text-[0.55rem] opacity-40">SYSTEM V2.0 // MULTITHREADING</p>
       </div>
     </div>
   );

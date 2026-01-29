@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { CellData, Player } from '../types';
 
@@ -11,6 +12,16 @@ interface CellProps {
   showGhostWalls: boolean; 
   onWallClick: (side: 'top' | 'right' | 'bottom' | 'left') => void;
 }
+
+const getPlayerColorVar = (player: Player) => {
+    switch(player) {
+        case Player.RED: return 'var(--thread-red)';
+        case Player.BLUE: return 'var(--thread-blue)';
+        case Player.GREEN: return 'var(--thread-green)';
+        case Player.YELLOW: return 'var(--thread-yellow)';
+        default: return 'var(--ink)';
+    }
+};
 
 const Cell: React.FC<CellProps> = ({ 
   cell, 
@@ -26,7 +37,7 @@ const Cell: React.FC<CellProps> = ({
   // Base classes for the cell
   const baseClasses = "relative w-full h-full flex items-center justify-center border-box select-none";
   
-  const playerColorVar = currentPlayer === Player.RED ? 'var(--thread-red)' : 'var(--thread-blue)';
+  const activeColorVar = currentPlayer ? getPlayerColorVar(currentPlayer) : 'var(--ink)';
 
   return (
     <div 
@@ -42,12 +53,12 @@ const Cell: React.FC<CellProps> = ({
             {/* Subtle background tint */}
             <div 
                 className="absolute inset-1 rounded-sm opacity-10"
-                style={{ backgroundColor: playerColorVar }}
+                style={{ backgroundColor: activeColorVar }}
             />
             {/* Center Dot */}
             <div 
                 className="absolute w-3 h-3 rounded-full opacity-60 animate-pulse" 
-                style={{ backgroundColor: playerColorVar }}
+                style={{ backgroundColor: activeColorVar }}
             />
         </>
       )}
@@ -67,7 +78,7 @@ const Cell: React.FC<CellProps> = ({
         <div 
           className={`piece-anim relative w-[75%] h-[75%] rounded-full shadow-md flex items-center justify-center transition-transform duration-300 ${isSelected ? 'scale-110' : ''}`}
           style={{
-            backgroundColor: cell.occupant === Player.RED ? 'var(--thread-red)' : 'var(--thread-blue)',
+            backgroundColor: getPlayerColorVar(cell.occupant),
             boxShadow: 'inset 0 0 10px rgba(0,0,0,0.1), 0 4px 8px rgba(0,0,0,0.2)'
           }}
         >
@@ -88,37 +99,21 @@ const Cell: React.FC<CellProps> = ({
 
       {/* --- WALLS --- */}
       
-      {/* Top Wall */}
-      {cell.walls.top && (
-        <div 
-            className="absolute top-[-2px] left-[-2px] right-[-2px] h-[4px] wall-stitch z-10"
-            style={{ color: cell.walls.top === Player.RED ? 'var(--thread-red)' : 'var(--thread-blue)' }} 
-        />
-      )}
-      
-      {/* Bottom Wall */}
-      {cell.walls.bottom && (
-        <div 
-            className="absolute bottom-[-2px] left-[-2px] right-[-2px] h-[4px] wall-stitch z-10"
-            style={{ color: cell.walls.bottom === Player.RED ? 'var(--thread-red)' : 'var(--thread-blue)' }}
-        />
-      )}
-      
-      {/* Left Wall */}
-      {cell.walls.left && (
-        <div 
-            className="absolute left-[-2px] top-[-2px] bottom-[-2px] w-[4px] wall-stitch-v z-10"
-            style={{ color: cell.walls.left === Player.RED ? 'var(--thread-red)' : 'var(--thread-blue)' }}
-        />
-      )}
-
-      {/* Right Wall */}
-      {cell.walls.right && (
-        <div 
-            className="absolute right-[-2px] top-[-2px] bottom-[-2px] w-[4px] wall-stitch-v z-10"
-            style={{ color: cell.walls.right === Player.RED ? 'var(--thread-red)' : 'var(--thread-blue)' }}
-        />
-      )}
+      {['top', 'right', 'bottom', 'left'].map(side => {
+          const owner = cell.walls[side as keyof typeof cell.walls];
+          if (!owner) return null;
+          
+          const isVert = side === 'left' || side === 'right';
+          const style: React.CSSProperties = { color: getPlayerColorVar(owner) };
+          let className = "absolute z-10 ";
+          
+          if (side === 'top') className += "top-[-2px] left-[-2px] right-[-2px] h-[4px] wall-stitch";
+          if (side === 'bottom') className += "bottom-[-2px] left-[-2px] right-[-2px] h-[4px] wall-stitch";
+          if (side === 'left') className += "left-[-2px] top-[-2px] bottom-[-2px] w-[4px] wall-stitch-v";
+          if (side === 'right') className += "right-[-2px] top-[-2px] bottom-[-2px] w-[4px] wall-stitch-v";
+          
+          return <div key={side} className={className} style={style} />;
+      })}
 
 
       {/* --- GHOST WALLS (Interaction Targets) --- */}

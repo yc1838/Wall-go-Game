@@ -1,6 +1,9 @@
+
 export enum Player {
   RED = 'RED',
   BLUE = 'BLUE',
+  GREEN = 'GREEN',
+  YELLOW = 'YELLOW'
 }
 
 export enum GamePhase {
@@ -38,10 +41,11 @@ export interface CellData {
 export interface GameState {
   board: CellData[][];
   currentPlayer: Player;
+  activePlayers: Player[]; // NEW: Tracks who is in the current game
   phase: GamePhase;
   turnTimer: number;
   winner: Player | 'DRAW' | null;
-  scores: { [key in Player]: number };
+  scores: { [key in Player]?: number }; // Optional because not all players might play
   
   // Game Mode
   gameMode: GameMode | null; // Null means we are in the menu

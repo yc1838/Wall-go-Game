@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { GameMode, GamePhase, Player } from '../types';
 import { Cpu, X } from 'lucide-react';
@@ -9,12 +10,22 @@ interface ControlsProps {
   winner: Player | 'DRAW' | null;
   onReset: () => void;
   onUnselect: () => void;
-  scores: { [key in Player]: number };
+  scores: { [key in Player]?: number };
   isAiThinking?: boolean;
   gameMode: GameMode | null;
-  isCompact?: boolean;
-  playerNames: { [key in Player]: string };
+  activePlayers: Player[];
+  playerNames: { [key in Player]?: string };
 }
+
+const getPlayerColorVar = (player: Player) => {
+    switch(player) {
+        case Player.RED: return 'var(--thread-red)';
+        case Player.BLUE: return 'var(--thread-blue)';
+        case Player.GREEN: return 'var(--thread-green)';
+        case Player.YELLOW: return 'var(--thread-yellow)';
+        default: return 'var(--ink)';
+    }
+};
 
 const Controls: React.FC<ControlsProps> = ({ 
   phase, 
@@ -26,7 +37,7 @@ const Controls: React.FC<ControlsProps> = ({
   scores,
   isAiThinking,
   gameMode,
-  isCompact,
+  activePlayers,
   playerNames
 }) => {
   
@@ -34,8 +45,8 @@ const Controls: React.FC<ControlsProps> = ({
     if (isAiThinking) return "Automata is calculating...";
 
     switch (phase) {
-      case GamePhase.PLACEMENT: return "Placement: Tap empty square";
-      case GamePhase.ACTION_SELECT: return "Action: Select your button";
+      case GamePhase.PLACEMENT: return `${playerNames[currentPlayer]}: Place your button`;
+      case GamePhase.ACTION_SELECT: return `${playerNames[currentPlayer]}: Select a button`;
       case GamePhase.ACTION_MOVE: return "Action: Move piece";
       case GamePhase.ACTION_WALL: return "Action: Stitch a wall";
       case GamePhase.GAME_OVER: return "Pattern Complete";
@@ -43,42 +54,44 @@ const Controls: React.FC<ControlsProps> = ({
     }
   };
 
+  // Grid Layout for players: 
+  // 2 players: 2 cols, 1 row
+  // 3-4 players: 2 cols, 2 rows (more compact)
+  const gridClass = activePlayers.length > 2 ? 'grid grid-cols-2 gap-2' : 'flex w-full gap-4';
+
   return (
     <div className="w-full flex flex-col gap-2">
       
       {/* Player Input Area */}
-      <div className="flex w-full gap-4">
-          
-          {/* RED PLAYER */}
-          <div className={`flex-1 flex items-center p-2 border-2 transition-all relative ${currentPlayer === Player.RED ? 'border-[var(--ink)] bg-white/40' : 'border-dashed border-black/10 bg-white/10'}`}>
-              {/* Active Marker */}
-              {currentPlayer === Player.RED && <div className="absolute bottom-0 right-0 w-3 h-3 bg-[var(--ink)]" />}
-              
-              <div className="w-3 h-3 rounded-full bg-[var(--thread-red)] mr-2 shrink-0" />
-              <div className="flex-1 min-w-0">
-                  <div className="font-serif font-bold text-lg text-[var(--ink)] truncate leading-none">
-                      {playerNames[Player.RED]}
-                  </div>
-              </div>
-              <span className="font-serif font-bold text-xl ml-2">{scores[Player.RED]}</span>
-          </div>
+      <div className={gridClass}>
+          {activePlayers.map(p => {
+              const isActive = currentPlayer === p;
+              const isWinner = winner === p;
+              const bgColor = isActive ? 'bg-white/40' : 'bg-white/10';
+              const borderColor = isActive ? 'border-[var(--ink)]' : 'border-dashed border-black/10';
+              const colorVar = getPlayerColorVar(p);
 
-          {/* BLUE PLAYER */}
-          <div className={`flex-1 flex items-center p-2 border-2 transition-all relative ${currentPlayer === Player.BLUE ? 'border-[var(--ink)] bg-white/40' : 'border-dashed border-black/10 bg-white/10'}`}>
-              {/* Active Marker */}
-              {currentPlayer === Player.BLUE && <div className="absolute bottom-0 right-0 w-3 h-3 bg-[var(--ink)]" />}
-              
-              <div className="w-3 h-3 rounded-full bg-[var(--thread-blue)] mr-2 shrink-0" />
-              {gameMode === GameMode.PVAI && <Cpu size={14} className="mr-1 text-[var(--thread-blue)] opacity-60 shrink-0" />}
-              
-              <div className="flex-1 min-w-0">
-                  <div className="font-serif font-bold text-lg text-[var(--ink)] truncate leading-none">
-                      {playerNames[Player.BLUE]}
+              return (
+                  <div 
+                    key={p} 
+                    className={`flex-1 flex items-center p-2 border-2 transition-all relative ${borderColor} ${bgColor}`}
+                  >
+                      {/* Active Indicator */}
+                      {isActive && <div className="absolute bottom-0 right-0 w-3 h-3 bg-[var(--ink)]" />}
+                      
+                      <div className="w-3 h-3 rounded-full mr-2 shrink-0" style={{backgroundColor: colorVar}} />
+                      
+                      {gameMode === GameMode.PVAI && p === Player.BLUE && <Cpu size={14} className="mr-1 opacity-60 shrink-0" style={{color: colorVar}} />}
+                      
+                      <div className="flex-1 min-w-0">
+                          <div className="font-serif font-bold text-sm md:text-lg text-[var(--ink)] truncate leading-none">
+                              {playerNames[p] || p}
+                          </div>
+                      </div>
+                      <span className="font-serif font-bold text-lg ml-2">{scores[p]}</span>
                   </div>
-              </div>
-              <span className="font-serif font-bold text-xl ml-2">{scores[Player.BLUE]}</span>
-          </div>
-
+              );
+          })}
       </div>
 
       {/* Status Bar */}
@@ -103,8 +116,8 @@ const Controls: React.FC<ControlsProps> = ({
                  </button>
               </div>
           ) : (
-              <span className="font-serif italic text-[var(--ink)] text-sm md:text-base px-2">
-                 {winner ? (winner === 'DRAW' ? 'Perfectly Balanced' : `${winner === Player.RED ? playerNames[Player.RED] : playerNames[Player.BLUE]} Wins`) : getPhaseText()}
+              <span className="font-serif italic text-[var(--ink)] text-sm md:text-base px-2 text-center leading-tight">
+                 {winner ? (winner === 'DRAW' ? 'Perfectly Balanced' : `${playerNames[winner as Player]} Wins`) : getPhaseText()}
               </span>
           )}
 
