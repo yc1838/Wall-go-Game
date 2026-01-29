@@ -57,6 +57,15 @@ const RulesModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
         </section>
         
         <section>
+          <h3 className="mono font-bold text-sm mb-1">The Board</h3>
+          <ul className="list-disc pl-4 space-y-1 text-sm">
+             <li>2 Players: 7x7 Grid</li>
+             <li>3 Players: 9x9 Grid</li>
+             <li>4 Players: 11x11 Grid</li>
+          </ul>
+        </section>
+        
+        <section>
           <h3 className="mono font-bold text-sm mb-1">Phase 1: Placement</h3>
           <p className="text-sm">Players take turns placing their buttons on the board. Each player places <strong>2 buttons</strong> in total.</p>
         </section>
@@ -82,9 +91,9 @@ const RulesModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
 const App: React.FC = () => {
   // --- State Initialization ---
   const [gameState, setGameState] = useState<GameState>({
-    board: createInitialBoard(),
+    board: createInitialBoard(7), // Default 7x7 for initial render
     currentPlayer: Player.RED,
-    activePlayers: [Player.RED, Player.BLUE], // Default 2
+    activePlayers: [Player.RED, Player.BLUE],
     phase: GamePhase.PLACEMENT,
     turnTimer: TURN_TIME_LIMIT,
     winner: null,
@@ -554,6 +563,11 @@ const App: React.FC = () => {
 
       const activePlayers = [Player.RED, Player.BLUE, Player.GREEN, Player.YELLOW].slice(0, playerCount);
 
+      // Determine Board Size based on Player Count
+      let boardSize = 7;
+      if (playerCount === 3) boardSize = 9;
+      if (playerCount === 4) boardSize = 11;
+
       // Create Placement Queue
       // Each player places 2 pieces. 
       // Order: P1, P2, P3... then P1, P2, P3...
@@ -569,7 +583,7 @@ const App: React.FC = () => {
           activePlayers,
           currentPlayer: queue[0], // First player to place
           placementQueue: queue.slice(1), // Remaining queue
-          board: createInitialBoard(),
+          board: createInitialBoard(boardSize),
           phase: GamePhase.PLACEMENT,
           scores: activePlayers.reduce((acc, p) => ({...acc, [p]: 0}), {})
       }));
@@ -581,7 +595,7 @@ const App: React.FC = () => {
     logEvent('game_reset');
 
     setGameState({
-        board: createInitialBoard(),
+        board: createInitialBoard(7), // Default back to 7x7 for safety
         currentPlayer: Player.RED,
         activePlayers: [Player.RED, Player.BLUE],
         phase: GamePhase.PLACEMENT,

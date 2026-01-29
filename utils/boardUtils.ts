@@ -1,12 +1,12 @@
 
-import { BOARD_SIZE, CellData, Coordinate, Player, WallState } from '../types';
+import { CellData, Coordinate, Player, WallState } from '../types';
 
-// Create initial empty board
-export const createInitialBoard = (): CellData[][] => {
+// Create initial empty board with dynamic size
+export const createInitialBoard = (size: number): CellData[][] => {
   const board: CellData[][] = [];
-  for (let y = 0; y < BOARD_SIZE; y++) {
+  for (let y = 0; y < size; y++) {
     const row: CellData[] = [];
-    for (let x = 0; x < BOARD_SIZE; x++) {
+    for (let x = 0; x < size; x++) {
       row.push({
         x,
         y,
@@ -19,13 +19,14 @@ export const createInitialBoard = (): CellData[][] => {
   return board;
 };
 
-// Check if a coordinate is within bounds
-export const isValidCoordinate = (c: Coordinate): boolean => {
-  return c.x >= 0 && c.x < BOARD_SIZE && c.y >= 0 && c.y < BOARD_SIZE;
+// Check if a coordinate is within bounds based on board size
+export const isValidCoordinate = (c: Coordinate, boardSize: number): boolean => {
+  return c.x >= 0 && c.x < boardSize && c.y >= 0 && c.y < boardSize;
 };
 
 // Add a wall between two cells or on the edge
 export const placeWall = (board: CellData[][], x: number, y: number, side: keyof WallState, player: Player): CellData[][] => {
+  const size = board.length;
   const newBoard = board.map(row => row.map(cell => ({ ...cell, walls: { ...cell.walls } })));
   
   // Set wall on current cell
@@ -33,9 +34,9 @@ export const placeWall = (board: CellData[][], x: number, y: number, side: keyof
 
   // Set wall on adjacent cell if it exists
   if (side === 'top' && y > 0) newBoard[y - 1][x].walls.bottom = player;
-  if (side === 'bottom' && y < BOARD_SIZE - 1) newBoard[y + 1][x].walls.top = player;
+  if (side === 'bottom' && y < size - 1) newBoard[y + 1][x].walls.top = player;
   if (side === 'left' && x > 0) newBoard[y][x - 1].walls.right = player;
-  if (side === 'right' && x < BOARD_SIZE - 1) newBoard[y][x + 1].walls.left = player;
+  if (side === 'right' && x < size - 1) newBoard[y][x + 1].walls.left = player;
 
   return newBoard;
 };
@@ -51,6 +52,7 @@ export const isBlocked = (from: CellData, to: CellData): boolean => {
 
 // BFS to find valid moves (0, 1, or 2 steps)
 export const getValidMoves = (board: CellData[][], start: Coordinate): Coordinate[] => {
+  const size = board.length;
   const validMoves: Coordinate[] = [];
   const queue: { coord: Coordinate; dist: number }[] = [{ coord: start, dist: 0 }];
   const visited = new Set<string>();
@@ -76,7 +78,7 @@ export const getValidMoves = (board: CellData[][], start: Coordinate): Coordinat
       const nextY = coord.y + dir.dy;
       const nextCoord = { x: nextX, y: nextY };
 
-      if (isValidCoordinate(nextCoord)) {
+      if (isValidCoordinate(nextCoord, size)) {
         const currentCell = board[coord.y][coord.x];
         const targetCell = board[nextY][nextX];
 
@@ -99,12 +101,13 @@ export const getValidMoves = (board: CellData[][], start: Coordinate): Coordinat
 // Flood fill to calculate territory size and check connectivity
 // Returns a set of reachable coordinates strings "x,y"
 export const getReachableArea = (board: CellData[][], player: Player): Set<string> => {
+  const size = board.length;
   const queue: Coordinate[] = [];
   const visited = new Set<string>();
 
   // Initialize with all pieces of the player
-  for (let y = 0; y < BOARD_SIZE; y++) {
-    for (let x = 0; x < BOARD_SIZE; x++) {
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
       if (board[y][x].occupant === player) {
         queue.push({ x, y });
         visited.add(`${x},${y}`);
@@ -122,7 +125,7 @@ export const getReachableArea = (board: CellData[][], player: Player): Set<strin
       const nx = curr.x + dir.dx;
       const ny = curr.y + dir.dy;
 
-      if (isValidCoordinate({ x: nx, y: ny })) {
+      if (isValidCoordinate({ x: nx, y: ny }, size)) {
         const currentCell = board[curr.y][curr.x];
         const nextCell = board[ny][nx];
         const key = `${nx},${ny}`;
@@ -141,11 +144,7 @@ export const getReachableArea = (board: CellData[][], player: Player): Set<strin
 
 // MULTI-PLAYER END CONDITION CHECK
 export const checkGameEndCondition = (board: CellData[][], activePlayers: Player[]): boolean => {
-  // Game ends when NO player can reach ANY OTHER player's pieces.
-  // We need to check connectivity between every pair of active players.
-  
-  // 1. Map each player to their set of reachable coordinates (using BFS)
-  // Note: getReachableArea stops at occupants, but effectively we want to see if territories touch.
+  const size = board.length;
   
   // Optimized approach: 
   // Run BFS from Player A. If we encounter a piece belonging to Player B, then A and B are connected.
@@ -157,8 +156,8 @@ export const checkGameEndCondition = (board: CellData[][], activePlayers: Player
       const visited = new Set<string>();
       
       // Init with P1 pieces
-      for(let y=0; y<BOARD_SIZE; y++) {
-        for(let x=0; x<BOARD_SIZE; x++) {
+      for(let y=0; y<size; y++) {
+        for(let x=0; x<size; x++) {
           if (board[y][x].occupant === p1) {
             queue.push({x,y});
             visited.add(`${x},${y}`);
@@ -175,7 +174,7 @@ export const checkGameEndCondition = (board: CellData[][], activePlayers: Player
             const nx = curr.x + dir.dx;
             const ny = curr.y + dir.dy;
             
-            if (isValidCoordinate({x:nx, y:ny})) {
+            if (isValidCoordinate({x:nx, y:ny}, size)) {
                 const currentCell = board[curr.y][curr.x];
                 const nextCell = board[ny][nx];
                 const key = `${nx},${ny}`;
@@ -211,12 +210,13 @@ export const calculateScores = (board: CellData[][], activePlayers: Player[]): {
 };
 
 export const calculateLargestTerritory = (board: CellData[][], player: Player): number => {
+    const size = board.length;
     let maxTerritory = 0;
     const visitedGlobal = new Set<string>();
 
     const playerPieces: Coordinate[] = [];
-    for(let y=0; y<BOARD_SIZE; y++) {
-        for(let x=0; x<BOARD_SIZE; x++) {
+    for(let y=0; y<size; y++) {
+        for(let x=0; x<size; x++) {
             if (board[y][x].occupant === player) {
                 playerPieces.push({x,y});
             }
@@ -244,7 +244,7 @@ export const calculateLargestTerritory = (board: CellData[][], player: Player): 
             for (const dir of directions) {
                 const nx = curr.x + dir.dx;
                 const ny = curr.y + dir.dy;
-                if (isValidCoordinate({x:nx, y:ny})) {
+                if (isValidCoordinate({x:nx, y:ny}, size)) {
                     const currentCell = board[curr.y][curr.x];
                     const nextCell = board[ny][nx];
                     const nKey = `${nx},${ny}`;

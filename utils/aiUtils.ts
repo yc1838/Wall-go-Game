@@ -1,9 +1,9 @@
+
 import { 
     CellData, 
     Coordinate, 
     Player, 
-    WallState, 
-    BOARD_SIZE 
+    WallState
 } from '../types';
 import { 
     getValidMoves, 
@@ -31,6 +31,7 @@ interface AiMove {
  */
 export const calculateBestMove = (originalBoard: CellData[][], aiPlayer: Player, opponent: Player): AiMove | null => {
     console.time("AI_THINK");
+    const boardSize = originalBoard.length;
     let bestMove: AiMove | null = null;
     let maxScore = -Infinity;
     let evaluations = 0;
@@ -40,8 +41,8 @@ export const calculateBestMove = (originalBoard: CellData[][], aiPlayer: Player,
 
     // 2. Find all AI pieces
     const aiPieces: Coordinate[] = [];
-    for (let y = 0; y < BOARD_SIZE; y++) {
-        for (let x = 0; x < BOARD_SIZE; x++) {
+    for (let y = 0; y < boardSize; y++) {
+        for (let x = 0; x < boardSize; x++) {
             if (board[y][x].occupant === aiPlayer) {
                 aiPieces.push({ x, y });
             }
@@ -103,20 +104,22 @@ export const calculateBestMove = (originalBoard: CellData[][], aiPlayer: Player,
 
 // Apply wall in-place (Mutation)
 const applyWall = (board: CellData[][], x: number, y: number, side: keyof WallState, player: Player) => {
+    const size = board.length;
     board[y][x].walls[side] = player;
     if (side === 'top' && y > 0) board[y - 1][x].walls.bottom = player;
-    if (side === 'bottom' && y < BOARD_SIZE - 1) board[y + 1][x].walls.top = player;
+    if (side === 'bottom' && y < size - 1) board[y + 1][x].walls.top = player;
     if (side === 'left' && x > 0) board[y][x - 1].walls.right = player;
-    if (side === 'right' && x < BOARD_SIZE - 1) board[y][x + 1].walls.left = player;
+    if (side === 'right' && x < size - 1) board[y][x + 1].walls.left = player;
 };
 
 // Remove wall in-place (Backtracking)
 const removeWall = (board: CellData[][], x: number, y: number, side: keyof WallState) => {
+    const size = board.length;
     board[y][x].walls[side] = null;
     if (side === 'top' && y > 0) board[y - 1][x].walls.bottom = null;
-    if (side === 'bottom' && y < BOARD_SIZE - 1) board[y + 1][x].walls.top = null;
+    if (side === 'bottom' && y < size - 1) board[y + 1][x].walls.top = null;
     if (side === 'left' && x > 0) board[y][x - 1].walls.right = null;
-    if (side === 'right' && x < BOARD_SIZE - 1) board[y][x + 1].walls.left = null;
+    if (side === 'right' && x < size - 1) board[y][x + 1].walls.left = null;
 };
 
 /**

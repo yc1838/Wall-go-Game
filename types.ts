@@ -65,5 +65,4 @@ export interface GameState {
 
 export type CounterSource = 'GLOBAL' | 'LOCAL' | 'OFFLINE';
 
-export const BOARD_SIZE = 7;
 export const TURN_TIME_LIMIT = 90; // seconds
